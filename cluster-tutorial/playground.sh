@@ -6,7 +6,7 @@ cat ~/.ssh/id_rsa.pub
 
 # Move public key to all other VMs
 sudo cat >> ~/.ssh/authorized_keys <<EOF
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDUudk1Ez8vtL1sdT/VS3fQVni1HPp+TXZZaThFJ5YuAA4FBcnH7ff7yZrlkytmmydV92czPO+TCSG0a0IqdUs0KJYJAixW6FzMb7TitUSgxtyAx7ZDweCIEzf0N//+N8EBSeKyFLsLpBTTTn5woPXZyMq+ptQDiSFK6/G2Jv3MTylwP24/guHCsUQIB3p5xLxWP7htln35COt4+hSbiBWNGG67+Hr4rf7vw29Bg39kiPwtuTHW1Etczc2Is57LfygrxiYon3emecqMLJ9rPnkjpW4ml7ba2j3kXwNTkXOnFiSxoM4bxfePryNzKPUOLDmqzSoNBlY3Td/i8wgSnPHtOgKzGEnp0qyE3emFhvRPiuAjaX7J0LbvwS5ocaydwmwGRKmolzJ1vRXIC+m3ojG1rHAz9zollDwzW4WfuXzncoYT0jIfv35f4yZ8w6Fze+IgzTWIyYmTHvBUGJgVFAaF3JZ+W5KLkezBx3Nt/GoF367HhGsB5xnzKe6lXbFPS70= vagrant@admin
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCYIs/FxMFdludVhA0NiePYtHu6OUME4I5m4fn1ZoVAdd8RlAYa1DljAGsSJXDcacFVOxKN2QPH8JcRYaznexVy/ePNP/4YXEvYNATsfPj2cVIa8GyOToT0GB/tAL21aGLCeXLchYah6xiePHEZGm+VrY6dfbURn7pJBSN7URQwJdWcBltwbl9iFx/4eA6nGX074HSHmGY8OQZU+F9RGXIhRPyrNVhIz/8Qe8m47QHF6Z9W86O560Jrl62kRyUGUNokamGl1/TR5QYVsZ9BqFgX6Qq55VMh4UqK9GZzN9Z3l8SgfZaPcTzQ6b/1elE7DdyvRKbMfCD+2kGKHv/wsllltwwK7a3htSWHG+aVTwbnblgVWGVVxHNH0j0RNQsH3duPlUD8EPz2d9hB+NZMhdkoSp9TGbn+GYuiGviHD4HDBxyryLbINY2LSFsw2wP5HT04zMDkoxFiEHFV9edZE/q7CWe5ganAU4pgHJzzkoG7JaYWCFXqZ2KhEN0OhLbkxTs= vagrant@admin
 EOF
 
 # install kubectl
@@ -67,9 +67,10 @@ openssl x509 -req -in ca.csr -signkey ca.key -CAcreateserial  -out ca.crt -days 
     openssl x509 -req -in kube-scheduler.csr -CA ca.crt -CAkey ca.key -CAcreateserial  -out kube-scheduler.crt -days 1000
 }
 
-kubernetes.default.svc.cluster,kubernetes.svc.cluster.local
 
 # The Kubernetes API Server Certificate
+
+# Create openssl conf file
 sudo cat > openssl.cnf <<EOF
 [req]
 req_extensions = v3_req
@@ -118,6 +119,7 @@ IP.2 = 192.168.5.12
 IP.3 = 192.168.5.13
 IP.4 = 127.0.0.1
 EOF
+
 
 # Generate certificates for ETCD client
 {
@@ -219,7 +221,7 @@ KUBERNETES_HOSTNAMES=kubernetes,kubernetes.default,kubernetes.default.svc,kubern
   kubectl config set-cluster kubernetes-the-hard-way \
     --certificate-authority=ca.crt \
     --embed-certs=true \
-    --server=https://127.0.0.1:6443 \
+    --server=https://${LOADBALANCER_ADDRESS}:6443 \
     --kubeconfig=admin.kubeconfig
 
   kubectl config set-credentials admin \
@@ -414,6 +416,8 @@ ExecStart=/usr/local/bin/kube-apiserver \\
   --kubelet-https=true \\
   --runtime-config='api/all=true' \\
   --service-account-key-file=/var/lib/kubernetes/service-account.crt \\
+  --service-account-signing-key-file=/var/lib/kubernetes/service-account.key \\
+  --service-account-issuer=api \\
   --service-cluster-ip-range=10.96.0.0/24 \\
   --service-node-port-range=30000-32767 \\
   --tls-cert-file=/var/lib/kubernetes/kube-apiserver.crt \\
@@ -494,7 +498,6 @@ EOF
 
 # Start the Controller Services
 {
-  sudo swapoff -a
   sudo systemctl daemon-reload
   sudo systemctl enable kube-apiserver kube-controller-manager kube-scheduler
   sudo systemctl restart kube-apiserver kube-controller-manager kube-scheduler
@@ -532,6 +535,9 @@ sudo service haproxy restart
 
 curl  https://192.168.5.30:6443/version -k
 
+# verify control plane
+kubectl get componentstatuses --kubeconfig admin.kubeconfig
+
 # Generate a certificate and private key for one worker node:
 
 cat > openssl-worker-1.cnf <<EOF
@@ -548,9 +554,11 @@ DNS.1 = worker-1
 IP.1 = 192.168.5.21
 EOF
 
-openssl genrsa -out worker-1.key 2048
+{
+  openssl genrsa -out worker-1.key 2048
 openssl req -new -key worker-1.key -subj "/CN=system:node:worker-1/O=system:nodes" -out worker-1.csr -config openssl-worker-1.cnf
 openssl x509 -req -in worker-1.csr -CA ca.crt -CAkey ca.key -CAcreateserial  -out worker-1.crt -extensions v3_req -extfile openssl-worker-1.cnf -days 1000
+}
 
 # set load balancer
 LOADBALANCER_ADDRESS=192.168.5.30
@@ -657,7 +665,7 @@ sudo swapoff -a
 
 sudo systemctl restart kubelet.service
 
-systemctl status kubelet
+sudo systemctl status kubelet
 
 # Create the kubelet.service systemd unit file:
 
@@ -732,7 +740,7 @@ done
 # Move the ca certificate
 sudo mv ca.crt /var/lib/kubernetes/
 
-# Create bootstrap token
+# Create bootstrap token on admin
 {
 cat > bootstrap-token-07401b.yaml <<EOF
 apiVersion: v1
@@ -833,7 +841,7 @@ EOF
 kubectl create -f auto-approve-renewals-for-nodes.yaml --kubeconfig admin.kubeconfig
 }
 
-# create a kubeconfig file
+# create a kubeconfig file on worker
 cat <<EOF | sudo tee /var/lib/kubelet/bootstrap-kubeconfig
 apiVersion: v1
 clusters:
@@ -904,6 +912,35 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
+# For Containerd worker 2 and 3
+cat <<EOF | sudo tee /etc/systemd/system/kubelet.service
+[Unit]
+Description=Kubernetes Kubelet
+Documentation=https://github.com/kubernetes/kubernetes
+After=containerd.service
+Requires=containerd.service
+
+[Service]
+ExecStart=/usr/local/bin/kubelet \\
+  --bootstrap-kubeconfig="/var/lib/kubelet/bootstrap-kubeconfig" \\
+  --config=/var/lib/kubelet/kubelet-config.yaml \\
+  --container-runtime=remote \\
+  --container-runtime-endpoint=unix:///var/run/containerd/containerd.sock \\
+  --image-pull-progress-deadline=2m \\
+  --kubeconfig=/var/lib/kubelet/kubeconfig \\
+  --cert-dir=/var/lib/kubelet/pki/ \\
+  --rotate-certificates=true \\
+  --rotate-server-certificates=true \\
+  --network-plugin=cni \\
+  --register-node=true \\
+  --v=2
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 # move kube proxy kubeconfig
 sudo mv kube-proxy.kubeconfig /var/lib/kube-proxy/kubeconfig
 
@@ -935,6 +972,14 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
+
+# With Containerd
+{
+  sudo swapoff -a
+  sudo systemctl daemon-reload
+  sudo systemctl enable containerd kubelet kube-proxy
+  sudo systemctl start containerd kubelet kube-proxy
+}
 
 
 # Start the Worker Services
@@ -1228,7 +1273,7 @@ ExecStart=/usr/local/bin/kubelet \\
   --config=/var/lib/kubelet/kubelet-config.yaml \\
   --container-runtime=remote \\
   --container-runtime-endpoint=unix:///var/run/containerd/containerd.sock \\
-  --image-pull-progress-deadline=2m \\
+  --image-pull-progress-deadline=4m \\
   --kubeconfig=/var/lib/kubelet/kubeconfig \\
   --tls-cert-file=/var/lib/kubelet/${HOSTNAME}.crt \\
   --tls-private-key-file=/var/lib/kubelet/${HOSTNAME}.key \\
@@ -1283,135 +1328,41 @@ EOF
   sudo systemctl start containerd kubelet kube-proxy
 }
 
-# Worker 2
-cat > openssl-worker-2.cnf <<EOF
-[req]
-req_extensions = v3_req
-distinguished_name = req_distinguished_name
-[req_distinguished_name]
-[ v3_req ]
-basicConstraints = CA:FALSE
-keyUsage = nonRepudiation, digitalSignature, keyEncipherment
-subjectAltName = @alt_names
-[alt_names]
-DNS.1 = worker-2
-IP.1 = 192.168.5.22
-EOF
 
-# generate certiificates
-
+# Configure for remote access
 {
-  openssl genrsa -out worker-2.key 2048
-openssl req -new -key worker-2.key -subj "/CN=system:node:worker-2/O=system:nodes" -out worker-2.csr -config openssl-worker-2.cnf
-openssl x509 -req -in worker-2.csr -CA ca.crt -CAkey ca.key -CAcreateserial  -out worker-2.crt -extensions v3_req -extfile openssl-worker-2.cnf -days 1000
-}
+  KUBERNETES_LB_ADDRESS=192.168.5.30
 
-# Generate a kubeconfig file for the first worker 2 node.
-
-{
   kubectl config set-cluster kubernetes-the-hard-way \
     --certificate-authority=ca.crt \
     --embed-certs=true \
-    --server=https://${LOADBALANCER_ADDRESS}:6443 \
-    --kubeconfig=worker-2.kubeconfig
+    --server=https://${KUBERNETES_LB_ADDRESS}:6443
 
-  kubectl config set-credentials system:node:worker-2 \
-    --client-certificate=worker-2.crt \
-    --client-key=worker-2.key \
-    --embed-certs=true \
-    --kubeconfig=worker-2.kubeconfig
+  kubectl config set-credentials admin \
+    --client-certificate=admin.crt \
+    --client-key=admin.key
 
-  kubectl config set-context default \
+  kubectl config set-context kubernetes-the-hard-way \
     --cluster=kubernetes-the-hard-way \
-    --user=system:node:worker-2 \
-    --kubeconfig=worker-2.kubeconfig
+    --user=admin
 
-  kubectl config use-context default --kubeconfig=worker-2.kubeconfig
+  kubectl config use-context kubernetes-the-hard-way
 }
 
-# Copy certificates, private keys and kubeconfig files to the worker node:
+# Kube API Server with Kubelet API
 
-scp ca.crt worker-2.crt worker-2.key worker-2.kubeconfig worker-2:~/
 
-# Configure the Kubelet
+
+# Resolving when you restart your cluster
+
+# 1. To allow domain resolution
 {
-  sudo mv ${HOSTNAME}.key ${HOSTNAME}.crt /var/lib/kubelet/
-  sudo mv ${HOSTNAME}.kubeconfig /var/lib/kubelet/kubeconfig
-  sudo mv ca.crt /var/lib/kubernetes/
+  sudo service systemd-resolved restart 
+
+# 2. switch off disk swap on the worker node to allow Kubelet to run
+sudo swapoff -a
+
+# 3. stop and start kubelet
+sudo service kubelet stop && sudo service kubelet start
+
 }
-
-cat <<EOF | sudo tee /var/lib/kubelet/kubelet-config.yaml
-kind: KubeletConfiguration
-apiVersion: kubelet.config.k8s.io/v1beta1
-authentication:
-  anonymous:
-    enabled: false
-  webhook:
-    enabled: true
-  x509:
-    clientCAFile: "/var/lib/kubernetes/ca.crt"
-authorization:
-  mode: Webhook
-clusterDomain: "cluster.local"
-clusterDNS:
-  - "10.96.0.10"
-resolvConf: "/run/systemd/resolve/resolv.conf"
-runtimeRequestTimeout: "15m"
-tlsCertFile: "/var/lib/kubelet/${HOSTNAME}.crt"
-tlsPrivateKeyFile: "/var/lib/kubelet/${HOSTNAME}.key"
-EOF
-
-cat <<EOF | sudo tee /etc/systemd/system/kubelet.service
-[Unit]
-Description=Kubernetes Kubelet
-Documentation=https://github.com/kubernetes/kubernetes
-After=containerd.service
-Requires=containerd.service
-
-[Service]
-ExecStart=/usr/local/bin/kubelet \\
-  --config=/var/lib/kubelet/kubelet-config.yaml \\
-  --container-runtime=remote \\
-  --container-runtime-endpoint=unix:///var/run/containerd/containerd.sock \\
-  --image-pull-progress-deadline=2m \\
-  --kubeconfig=/var/lib/kubelet/kubeconfig \\
-  --tls-cert-file=/var/lib/kubelet/${HOSTNAME}.crt \\
-  --tls-private-key-file=/var/lib/kubelet/${HOSTNAME}.key \\
-  --network-plugin=cni \\
-  --register-node=true \\
-  --v=2
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# move kube proxy kubeconfig
-sudo mv kube-proxy.kubeconfig /var/lib/kube-proxy/kubeconfig
-
-# Create the kube-proxy-config.yaml configuration file:
-
-cat <<EOF | sudo tee /var/lib/kube-proxy/kube-proxy-config.yaml
-kind: KubeProxyConfiguration
-apiVersion: kubeproxy.config.k8s.io/v1alpha1
-clientConnection:
-  kubeconfig: "/var/lib/kube-proxy/kubeconfig"
-mode: "iptables"
-clusterCIDR: "192.168.5.0/24"
-EOF
-
-cat <<EOF | sudo tee /etc/systemd/system/kube-proxy.service
-[Unit]
-Description=Kubernetes Kube Proxy
-Documentation=https://github.com/kubernetes/kubernetes
-
-[Service]
-ExecStart=/usr/local/bin/kube-proxy \\
-  --config=/var/lib/kube-proxy/kube-proxy-config.yaml
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF

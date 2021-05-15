@@ -8,6 +8,8 @@ ENV["LC_ALL"] = "en_US.UTF-8"
 # If this number is changed, remember to update setup-hosts.sh script with the new hosts IP details in /etc/hosts of each VM.
 NUM_CONTROLLER_NODES = 3
 NUM_WORKER_NODES = 3
+# "generic/ubuntu2004"
+IMAGE = "bento/ubuntu-20.04"
 
 # Networks
 # The Kubernetes networking model assumes a flat network in which containers and nodes can communicate with each other.
@@ -53,7 +55,7 @@ Vagrant.configure(2) do |config|
   # Every Vagrant development environment requires a box. You can search for
   # boxes at https://vagrantcloud.com/search.
   # config.vm.box = "base"
-  config.vm.box = "generic/ubuntu2004"
+  config.vm.box = IMAGE
 
   # Disable automatic box update checking. If you disable this, then
   # boxes will only be checked for updates when the user runs
@@ -62,6 +64,8 @@ Vagrant.configure(2) do |config|
 
   # Provision Load Balancer Node
   config.vm.define "loadbalancer" do |node|
+    
+    node.vm.box_check_update = false
 
     node.vm.provider "virtualbox" do |vb|
         vb.name = "kubernetes-ha-lb-v2"
@@ -83,6 +87,8 @@ Vagrant.configure(2) do |config|
 
   # Provision the admin machine
   config.vm.define "admin" do |node|
+    
+    node.vm.box_check_update = false
 
     node.vm.provider "virtualbox" do |vb|
         vb.name = "cluster-admin-v2"
@@ -105,6 +111,8 @@ Vagrant.configure(2) do |config|
   (1..NUM_CONTROLLER_NODES).each do |i|
 
     config.vm.define "controller-#{i}" do |node|
+
+      node.vm.box_check_update = false
       # Name shown in the GUI
       node.vm.provider "virtualbox" do |vb|
           vb.name = "kubernetes-ha-controller-#{i}-v2"
@@ -129,9 +137,11 @@ Vagrant.configure(2) do |config|
 
     config.vm.define "worker-#{i}" do |node|
 
+        node.vm.box_check_update = false
+
         node.vm.provider "virtualbox" do |vb|
             vb.name = "kubernetes-ha-worker-#{i}-v2"
-            vb.memory = 512
+            vb.memory = 1024
             vb.cpus = 1
         end
 
@@ -144,7 +154,7 @@ Vagrant.configure(2) do |config|
         end
 
         node.vm.provision "setup-dns", type: "shell", :path => "scripts/update-dns.sh"
-        node.vm.provision "install-docker", type: "shell", :path => "scripts/install-docker-2.sh"
+        # node.vm.provision "install-docker", type: "shell", :path => "scripts/install-docker-2.sh"
         node.vm.provision "allow-bridge-nf-traffic", :type => "shell", :path => "scripts/allow-bridge-nf-traffic.sh"
 
     end
