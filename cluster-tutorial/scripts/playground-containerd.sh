@@ -9,7 +9,7 @@ cat ~/.ssh/id_rsa.pub
 
 # Move public key to all other VMs
 sudo cat >> ~/.ssh/authorized_keys <<EOF
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCxaUcIzYNhmo1eZrd2FHqaqoYh71WG1Y9LCZvl98qRcdgVXO3QQMIFdE0ztHzg3O0oq2apBHvnFiybWV2BFmxHC/sYF38N2DsDyXEPzp7VABw95c1pgd9TM91LtTbfWte/id53yj6M0SN1AUgh2tcIGpYNivhJ6T8fCfT6bMQznt2Ljw7q2QUTZ+YtAXWANT52WiB1ggMM50SSix6pwRv+NpaQjaJsnb8gsjVyrHqDCoNHrpuN5eWdSsO6C7vtNZiRCl9LFc3t3vn8NXmE1bVIBEZ0NnP3uRnjZ4DRxl+LPN8r7mTnobTQzVKfH8dqizfTWFl6j6+aTGHJ/Z6QbMkuawoWSMBj5MOBrs92H5JsnB1D0+LVSu8uI5iLHwRwjHfChpeE4r+NoAd5hbhfGV05CjPfE8cHaMhWb1xb6F06T3m93E1OSuKF9BH9G0+RXM1+NHXFzc/uWmWUkW9URWE0AntuAwyhWLAfWWLok+g7VU5GntyZxKGawl/sfHuJCCs= vagrant@admin
+<<YOUR ADMIN RSA KEY>>
 EOF
 
 # install kubectl
