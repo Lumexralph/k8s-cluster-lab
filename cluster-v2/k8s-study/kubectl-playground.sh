@@ -175,3 +175,27 @@ kubectl apply -f web.yaml --dry-run=server --validate=false -o yaml
 # kubectl diff does a server-side dry run, and shows differences
 # Try kubectl diff on the YAML that we tweaked earlier:
 kubectl diff -f web.yaml
+
+# git clone https://github.com/IBM/guestbook.git
+# Get a shell to the container:
+kubectl exec -it shell-demo -- /bin/bash
+
+# Watching Pods and Events in the Cluster:
+kubectl get events -A -w
+kubectl get pods -A -w
+
+# This command creates a deployment and a pod. Then it drops you right into a shell where you can run commands
+kubectl run -it --image=amouat/network-utils --attach network-utils -- /bin/bash
+
+# You may list all these interfaces on your node using 
+ifconfig 
+ip a
+
+# Kubectl context to be able to interact with different clusters
+# In order to interact with a specific cluster, you only need to specify the cluster name as a context in kubectl:
+# kind-kind is the clucter context in the ~/.kube/config file.
+kubectl cluster-info --context kind-kind
+
+# Using Kustomize:
+# kustomize/deployment == <Kustomize directory>
+kubectl kustomize kustomize/deployment | kubectl apply -f -
