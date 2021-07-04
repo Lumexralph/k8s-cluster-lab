@@ -199,3 +199,8 @@ kubectl cluster-info --context kind-kind
 # Using Kustomize:
 # kustomize/deployment == <Kustomize directory>
 kubectl kustomize kustomize/deployment | kubectl apply -f -
+
+
+# VERY IMPORTANT TO FIND A FILE
+# search for a file vips.pc starting from the root
+sudo find / -name vips.pc
