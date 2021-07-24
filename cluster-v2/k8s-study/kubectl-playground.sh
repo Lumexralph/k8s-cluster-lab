@@ -204,3 +204,12 @@ kubectl kustomize kustomize/deployment | kubectl apply -f -
 # VERY IMPORTANT TO FIND A FILE
 # search for a file vips.pc starting from the root
 sudo find / -name vips.pc
+
+##### RUNNING CRON TASKS / JOBS
+# In the terminal, open the cron table for editing:
+sudo crontab -e
+# When you are prompted to select an editor, type the number corresponding to nano, and press ENTER.
+# At the bottom of the cron table, paste the following line:
+# /home/minecraft/backup.sh ==>  is the script yu want to be ran
+# That line instructs cron to run backups every 4 hours.
+0 */4 * * * /home/minecraft/backup.sh
