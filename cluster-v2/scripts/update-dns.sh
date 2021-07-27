@@ -22,3 +22,7 @@
 # sudo sed -i -e 's/#DNS=/DNS=8.8.8.8/' /etc/systemd/resolved.conf
 
 # sudo service systemd-resolved restart
+
+# while true; \
+# do curl -s https://qwiklabs-gcp-02-2fd505d9e3da.uc.r.appspot.com/random-error \
+# -w '\n' ;sleep .1s;done
