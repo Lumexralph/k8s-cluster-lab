@@ -1,0 +1,10 @@
+nameSuffix: -production
+commonLabels:
+  variant: production
+  org: acmeCorporation
+commonAnnotations:
+  note: Hello, I am production!
+bases:
+- ../../base
+patchesStrategicMerge:
+- deployment.yaml
