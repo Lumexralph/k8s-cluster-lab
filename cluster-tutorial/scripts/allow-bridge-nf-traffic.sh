@@ -32,3 +32,6 @@ EOF
 sudo sysctl --system >/dev/null 2>&1
 
 sudo apt update -qq >/dev/null 2>&1
+
+# disabled swap
+sudo swapoff -a
