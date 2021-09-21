@@ -518,9 +518,10 @@ EOF
 
 {
   sudo systemctl daemon-reload
-  sudo systemctl enable kube-apiserver kube-controller-manager kube-scheduler
+  # sudo systemctl enable kube-apiserver kube-controller-manager kube-scheduler
   sudo systemctl restart kube-apiserver kube-controller-manager kube-scheduler
 }
+
 
 
 # LOADBALANACER
@@ -982,7 +983,7 @@ sudo /usr/local/bin/kube-proxy \
 
 # Deploy weave network. Run only once on the master node.
 
-kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')&env.IPALLOC_RANGE=10.96.0.0/24"
 
 # Weave uses POD CIDR of 10.32.0.0/12 by default.
 
