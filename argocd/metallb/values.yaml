@@ -1,0 +1,6 @@
+configInline:
+  address-pools:
+   - name: lumex-ip-space
+     protocol: layer2
+     addresses:
+     - 192.168.5.24-192.168.5.30

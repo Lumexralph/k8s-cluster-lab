@@ -64,7 +64,7 @@ Vagrant.configure(2) do |config|
 
   # Provision Load Balancer Node
   config.vm.define "loadbalancer" do |node|
-    
+
     node.vm.box_check_update = false
 
     node.vm.provider "virtualbox" do |vb|
@@ -85,7 +85,7 @@ Vagrant.configure(2) do |config|
 
   # Provision the admin machine
   config.vm.define "admin" do |node|
-    
+
     node.vm.box_check_update = false
 
     node.vm.provider "virtualbox" do |vb|
