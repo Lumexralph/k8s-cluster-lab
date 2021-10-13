@@ -68,6 +68,7 @@ data:
           fallthrough in-addr.arpa ip6.arpa
         }
         prometheus :9153
+        forward . 8.8.8.8
         cache 30
         loop
         reload
@@ -83,7 +84,7 @@ metadata:
     k8s-app: kube-dns
     kubernetes.io/name: "CoreDNS"
 spec:
-  replicas: 3
+  replicas: 2
   strategy:
     type: RollingUpdate
     rollingUpdate:
