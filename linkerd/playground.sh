@@ -15,3 +15,16 @@ linkerd version
 
 # To check that your cluster is ready to install Linkerd, run:
 linkerd check --pre
+
+# linkerd install command generates a Kubernetes manifest
+# with all the core control plane resources.
+# install the control plane core, run:
+linkerd install | kubectl apply -f -
+
+# check the state of the cluster after install
+linkerd check
+
+# Install some extensions to give us additional functionality
+## To install the viz extension, run:
+# install the on-cluster metrics stack
+linkerd viz install | kubectl apply -f -

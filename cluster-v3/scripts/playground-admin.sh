@@ -668,7 +668,8 @@ ExecStart=/usr/local/bin/etcd \\
   --initial-cluster-token etcd-cluster-0 \\
   --initial-cluster controller-1=https://192.168.5.11:2380,controller-2=https://192.168.5.12:2380,controller-3=https://192.168.5.13:2380 \\
   --initial-cluster-state new \\
-  --data-dir=/var/lib/etcd
+  --data-dir=/var/lib/etcd \\
+  --logger=zap
 Restart=on-failure
 RestartSec=5
 
@@ -762,6 +763,12 @@ ExecStart=/usr/local/bin/kube-apiserver \\
   --service-node-port-range=30000-32767 \\
   --tls-cert-file=/var/lib/kubernetes/kubernetes.pem \\
   --tls-private-key-file=/var/lib/kubernetes/kubernetes-key.pem \\
+  --requestheader-client-ca-file=/var/lib/kubernetes/ca.pem \\
+  --requestheader-extra-headers-prefix=X-Remote-Extra- \\
+  --requestheader-group-headers=X-Remote-Group \\
+  --requestheader-username-headers=X-Remote-User \\
+  --proxy-client-cert-file=/var/lib/kubernetes/kubernetes.pem \\
+  --proxy-client-key-file=/var/lib/kubernetes/kubernetes-key.pem \\
   --v=2
 Restart=on-failure
 RestartSec=5
@@ -1256,3 +1263,65 @@ kubectl exec -ti $POD_NAME -- nslookup kubernetes
 
 # # You need to add this ClusterRole
 # kubectl create clusterrolebinding apiserver-kubelet-admin --user=kube-apiserver --clusterrole=system:kubelet-api-admin
+
+
+
+
+
+  # --requestheader-client-ca-file=/var/lib/kubernetes/ca.pem \
+  # --requestheader-extra-headers-prefix=X-Remote-Extra- \
+  # --requestheader-group-headers=X-Remote-Group \
+  # --requestheader-username-headers=X-Remote-User \
+  # --proxy-client-cert-file=/var/lib/kubernetes/kubernetes.pem \
+  # --proxy-client-key-file=/var/lib/kubernetes/kubernetes-key.pem \
+##### DEBUGGING
+kubectl get componentstatuses
+
+{
+  sudo systemctl daemon-reload
+  sudo systemctl enable etcd
+  sudo systemctl restart etcd
+}
+
+systemctl status etcd.service
+
+journalctl -xe
+
+sudo systemctl status kube-apiserver 
+sudo systemctl status kube-controller-manager 
+sudo systemctl status kube-scheduler
+
+# check port availability
+nc -l <port>
+
+# file storage
+df -h
+
+sudo /usr/local/bin/etcd \
+  --name controller-3 \
+  --cert-file=/etc/etcd/kubernetes.pem \
+  --key-file=/etc/etcd/kubernetes-key.pem \
+  --peer-cert-file=/etc/etcd/kubernetes.pem \
+  --peer-key-file=/etc/etcd/kubernetes-key.pem \
+  --trusted-ca-file=/etc/etcd/ca.pem \
+  --peer-trusted-ca-file=/etc/etcd/ca.pem \
+  --peer-client-cert-auth \
+  --client-cert-auth \
+  --initial-advertise-peer-urls https://192.168.5.13:2380 \
+  --listen-peer-urls https://192.168.5.13:2380 \
+  --listen-client-urls https://192.168.5.13:2379,https://127.0.0.1:2379 \
+  --advertise-client-urls https://192.168.5.13:2379 \
+  --initial-cluster-token etcd-cluster-0 \
+  --initial-cluster controller-1=https://192.168.5.11:2380,controller-2=https://192.168.5.12:2380,controller-3=https://192.168.5.13:2380 \
+  --initial-cluster-state new \
+  --data-dir=/var/lib/etcd 
+
+# ETCD debugging
+sudo ETCDCTL_API=3 etcdctl endpoint health \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/etcd/ca.pem \
+  --cert=/etc/etcd/kubernetes.pem \
+  --key=/etc/etcd/kubernetes-key.pem
+
+
+journalctl -t etcd --since today
