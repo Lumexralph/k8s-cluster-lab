@@ -16,6 +16,7 @@ sudo cat >> ~/.ssh/authorized_keys <<EOF
 <<YOUR ADMIN RSA KEY>>
 EOF
 
+
 # install kubectl
 {
     sudo wget https://storage.googleapis.com/kubernetes-release/release/v1.20.0/bin/linux/amd64/kubectl
@@ -414,7 +415,6 @@ cfssl gencert \
   -config=ca-config.json \
   -profile=kubernetes \
   service-account-csr.json | cfssljson -bare service-account
-
 }
 
 ## Distribute the Client and Server Certificates
@@ -431,6 +431,92 @@ cfssl gencert \
     for instance in controller-1 controller-2 controller-3; do
         scp ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem \
             service-account-key.pem service-account.pem ${instance}:~/
+    done
+}
+
+### To enable the aggregation layer in Kubernetes and
+# allow kube-api server be a proxy to extension servers, you need another CA
+# This will allow us to be able to use service mesh like Linkerd.
+{
+
+cat > kubernetes-front-proxy-ca-config.json <<EOF
+{
+  "signing": {
+    "default": {
+      "expiry": "8760h"
+    },
+    "profiles": {
+      "kubernetes-front-proxy": {
+        "usages": ["signing", "key encipherment", "server auth", "client auth"],
+        "expiry": "8760h"
+      }
+    }
+  }
+}
+EOF
+
+cat > kubernetes-front-proxy-ca-csr.json <<EOF
+{
+  "CN": "kubernetes-front-proxy",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "US",
+      "L": "Portland",
+      "O": "Kubernetes",
+      "OU": "CA",
+      "ST": "Oregon"
+    }
+  ]
+}
+EOF
+
+cfssl gencert -initca kubernetes-front-proxy-ca-csr.json | cfssljson -bare kubernetes-front-proxy-ca
+
+}
+# outputs: kubernetes-front-proxy-ca.csr, kubernetes-front-proxy-ca-key.pem, kubernetes-front-proxy-ca.pem
+
+##### Generate the front proxy public certificate and private keys
+# the common name will match any of the requestheader-allowed-names in the api-server flag
+{
+
+cat > front-proxy-client-csr.json <<EOF
+{
+  "CN": "front-proxy-client",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "US",
+      "L": "Portland",
+      "O": "Kubernetes",
+      "OU": "Kubernetes The Hard Way",
+      "ST": "Oregon"
+    }
+  ]
+}
+EOF
+
+cfssl gencert \
+  -ca=kubernetes-front-proxy-ca.pem \
+  -ca-key=kubernetes-front-proxy-ca-key.pem \
+  -config=kubernetes-front-proxy-ca-config.json \
+  -profile=kubernetes-front-proxy \
+  front-proxy-client-csr.json | cfssljson -bare front-proxy-client
+}
+
+# outputs: front-proxy-client.csr, front-proxy-client-key.pem, front-proxy-client.pem
+
+# Copy the appropriate front proxy certificates and private keys to each controller instance:
+{
+    for instance in controller-1 controller-2 controller-3; do
+        scp kubernetes-front-proxy-ca.pem kubernetes-front-proxy-ca-key.pem \
+         front-proxy-client-key.pem front-proxy-client.pem ${instance}:~/
     done
 }
 
@@ -615,7 +701,7 @@ EOF
 
 }
 
-####### Bootstrapping the etcd Cluster
+####### Bootstrapping the etcd Cluster in the Controller Nodes
 ### Kubernetes components are stateless and store cluster state in etcd.
 # bootstrap a three node etcd cluster and configure it for high availability and secure remote access.
 
@@ -723,9 +809,15 @@ wget -q --show-progress --https-only --timestamping \
     encryption-config.yaml /var/lib/kubernetes/
 }
 
+### Also, move the kubernetes front proxy keys
+{
+  sudo mv kubernetes-front-proxy-ca.pem kubernetes-front-proxy-ca-key.pem \
+    front-proxy-client-key.pem front-proxy-client.pem /var/lib/kubernetes/
+}
+
 # The instance internal IP address will be used to advertise the API Server to members of the cluster. Retrieve the internal IP address for the current controller instance:
 INTERNAL_IP=$(ip addr show eth1 | grep "inet " | awk '{print $2}' | cut -d / -f 1) && echo $INTERNAL_IP
-KUBERNETES_PUBLIC_ADDRESS=192.168.5.30
+KUBERNETES_PUBLIC_ADDRESS=192.168.5.30 && echo $KUBERNETES_PUBLIC_ADDRESS
 
 # Create the kube-apiserver.service systemd unit file:
 cat <<EOF | sudo tee /etc/systemd/system/kube-apiserver.service
@@ -763,12 +855,14 @@ ExecStart=/usr/local/bin/kube-apiserver \\
   --service-node-port-range=30000-32767 \\
   --tls-cert-file=/var/lib/kubernetes/kubernetes.pem \\
   --tls-private-key-file=/var/lib/kubernetes/kubernetes-key.pem \\
-  --requestheader-client-ca-file=/var/lib/kubernetes/ca.pem \\
+  --requestheader-client-ca-file=/var/lib/kubernetes/kubernetes-front-proxy-ca.pem \\
   --requestheader-extra-headers-prefix=X-Remote-Extra- \\
   --requestheader-group-headers=X-Remote-Group \\
   --requestheader-username-headers=X-Remote-User \\
-  --proxy-client-cert-file=/var/lib/kubernetes/kubernetes.pem \\
-  --proxy-client-key-file=/var/lib/kubernetes/kubernetes-key.pem \\
+  --requestheader-allowed-names=front-proxy-client \\
+  --enable-aggregator-routing=true \\
+  --proxy-client-cert-file=/var/lib/kubernetes/front-proxy-client.pem \\
+  --proxy-client-key-file=/var/lib/kubernetes/front-proxy-client-key.pem \\
   --v=2
 Restart=on-failure
 RestartSec=5
@@ -846,6 +940,11 @@ sudo apt-get update && sudo apt-get install -y haproxy
 
 # create configuration file
 cat <<EOF | sudo tee /etc/haproxy/haproxy.cfg
+defaults
+    timeout connect 5s
+    timeout client 1m
+    timeout server 1m
+
 frontend kubernetes
     bind 192.168.5.30:6443
     option tcplog
@@ -862,7 +961,12 @@ backend kubernetes-controller-nodes
 EOF
 
 # restart the loadbalancer service
+sudo systemctl status haproxy
+
 sudo service haproxy restart
+
+# Debug
+cat /var/log/haproxy.log
 
 # Start the Controller Services
 {
@@ -892,9 +996,9 @@ EOF
 
   sudo ln -s /etc/nginx/sites-available/kubernetes.default.svc.cluster.local /etc/nginx/sites-enabled/
 }
-
-sudo systemctl restart nginx
 sudo systemctl enable nginx
+sudo systemctl restart nginx
+
 
 kubectl cluster-info --kubeconfig admin.kubeconfig
 curl -H "Host: kubernetes.default.svc.cluster.local" -i http://127.0.0.1/healthz
@@ -903,7 +1007,7 @@ curl  https://192.168.5.30:6443/version -k
 curl -k https://192.168.5.30:6443/livez?verbose
 
 
-#### RBAC for Kubelet Authorization
+#### RBAC for Kubelet Authorization on any Controller Node
 # configure RBAC permissions to allow the Kubernetes API Server to access the Kubelet API on each worker node. 
 # Access to the Kubelet API is required for retrieving metrics, logs, and executing commands in pods.
 
@@ -950,7 +1054,7 @@ subjects:
     name: kubernetes
 EOF
 
-# FRONTEND LOAD BALANCER VERRIFICATION
+# FRONTEND LOAD BALANCER VERRIFICATION on Admin VM
 curl --cacert ca.pem https://${KUBERNETES_PUBLIC_ADDRESS}:6443/version
 
 
@@ -969,7 +1073,7 @@ curl --cacert ca.pem https://${KUBERNETES_PUBLIC_ADDRESS}:6443/version
 # Verify if swap is enabled:
 sudo swapon --show
 
-sudo swapoff -a # if output is empty
+sudo swapoff -a # if output is not empty
 
 ### Download and Install Worker Binaries
 wget -q --show-progress --https-only --timestamping \
@@ -1162,6 +1266,8 @@ EOF
   sudo systemctl start containerd kubelet kube-proxy
 }
 
+sudo systemctl status containerd
+
 {
   sudo systemctl daemon-reload
   sudo systemctl enable containerd kubelet kube-proxy
@@ -1202,7 +1308,7 @@ kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl versio
 
 # https://www.weave.works/docs/net/latest/kubernetes/kube-addon/
 
-### Deploying the DNS Cluster Add-on
+### Deploying the DNS Cluster Add-on, use the configured downloaded version
 ## deploy the DNS add-on which provides DNS based service discovery, backed by CoreDNS, to applications running inside the Kubernetes cluster.
 # Deploy the coredns cluster add-on:
 kubectl apply -f https://storage.googleapis.com/kubernetes-the-hard-way/coredns-1.8.yaml
@@ -1221,59 +1327,6 @@ POD_NAME=$(kubectl get pods -l run=busybox -o jsonpath="{.items[0].metadata.name
 kubectl exec -ti $POD_NAME -- nslookup kubernetes
 
 
-
-
-# cat <<EOF | kubectl apply --kubeconfig admin.kubeconfig -f -
-# apiVersion: rbac.authorization.k8s.io/v1
-# kind: ClusterRole
-# metadata:
-#   annotations:
-#     rbac.authorization.kubernetes.io/autoupdate: "true"
-#   labels:
-#     kubernetes.io/bootstrapping: rbac-defaults
-#   name: system:kube-apiserver-to-kubelet
-# rules:
-# - apiGroups: [""]
-#   resources:
-#   - nodes/proxy
-#   - nodes/stats
-#   - nodes/log
-#   - nodes/spec
-#   - nodes/metrics
-#   - pods
-#   verbs: ["*"]
-# EOF
-
-# # Bind the system:kube-apiserver-to-kubelet ClusterRole to the system:kube-apiserver user:
-
-# cat <<EOF | kubectl apply --kubeconfig admin.kubeconfig -f -
-# apiVersion: rbac.authorization.k8s.io/v1
-# kind: ClusterRoleBinding
-# metadata:
-#   name: system:kube-apiserver
-# roleRef:
-#   apiGroup: rbac.authorization.k8s.io
-#   kind: ClusterRole
-#   name: system:kube-apiserver-to-kubelet
-# subjects:
-# - kind: User
-#   name: kubernetes
-#   apiGroup: rbac.authorization.k8s.io
-# EOF
-
-# # You need to add this ClusterRole
-# kubectl create clusterrolebinding apiserver-kubelet-admin --user=kube-apiserver --clusterrole=system:kubelet-api-admin
-
-
-
-
-
-  # --requestheader-client-ca-file=/var/lib/kubernetes/ca.pem \
-  # --requestheader-extra-headers-prefix=X-Remote-Extra- \
-  # --requestheader-group-headers=X-Remote-Group \
-  # --requestheader-username-headers=X-Remote-User \
-  # --proxy-client-cert-file=/var/lib/kubernetes/kubernetes.pem \
-  # --proxy-client-key-file=/var/lib/kubernetes/kubernetes-key.pem \
 ##### DEBUGGING
 kubectl get componentstatuses
 
@@ -1290,6 +1343,8 @@ journalctl -xe
 sudo systemctl status kube-apiserver 
 sudo systemctl status kube-controller-manager 
 sudo systemctl status kube-scheduler
+
+sudo systemctl restart kube-apiserver 
 
 # check port availability
 nc -l <port>
