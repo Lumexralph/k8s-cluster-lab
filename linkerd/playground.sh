@@ -33,14 +33,13 @@ kubectl -n emojivoto port-forward svc/web-svc 8080:80
 
 # With Emoji installed and running, 
 # we’re ready to mesh it - that is, to add Linkerd’s data plane proxies to it.
+# linkerd inject command simply adds annotations to the pod spec that instruct 
+# Linkerd to inject the proxy into the pods when they are created.
 # Mesh the Emojivoto application by running:
 kubectl get -n emojivoto deploy -o yaml \
   | linkerd inject - \
   | kubectl apply -f -
 
-kubectl get -n emojivoto deploy -o yaml \
-    |linkerd inject --proxy-log-level=linkerd_stack::switch_ready=debug,linkerd_reconnect=debug,linkerd_proxy=debug,linkerd=info,warn - \
-    | kubectl apply -f -
 
 # Check your data plane with:
 linkerd -n emojivoto check --proxy

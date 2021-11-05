@@ -353,7 +353,7 @@ cfssl gencert \
 # the loadbalancer, it has to be static
 KUBERNETES_PUBLIC_ADDRESS=192.168.5.30
 
-KUBERNETES_HOSTNAMES=kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.svc.cluster.local,kubernetes.default.svc.cluster.local
+KUBERNETES_HOSTNAMES=kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc
 
 cat > kubernetes-csr.json <<EOF
 {
@@ -378,7 +378,7 @@ cfssl gencert \
   -ca=ca.pem \
   -ca-key=ca-key.pem \
   -config=ca-config.json \
-  -hostname=10.32.0.1,192.168.5.11,192.168.5.12,192.168.5.13,${KUBERNETES_PUBLIC_ADDRESS},192.168.5.40,127.0.0.1,${KUBERNETES_HOSTNAMES} \
+  -hostname=10.32.0.1,192.168.5.11,192.168.5.12,192.168.5.13,${KUBERNETES_PUBLIC_ADDRESS},127.0.0.1,${KUBERNETES_HOSTNAMES} \
   -profile=kubernetes \
   kubernetes-csr.json | cfssljson -bare kubernetes
 
@@ -446,7 +446,7 @@ cat > kubernetes-front-proxy-ca-config.json <<EOF
       "expiry": "8760h"
     },
     "profiles": {
-      "kubernetes-front-proxy": {
+      "kubernetes": {
         "usages": ["signing", "key encipherment", "server auth", "client auth"],
         "expiry": "8760h"
       }
@@ -494,7 +494,7 @@ cat > front-proxy-client-csr.json <<EOF
     {
       "C": "US",
       "L": "Portland",
-      "O": "Kubernetes",
+      "O": "system:masters",
       "OU": "Kubernetes The Hard Way",
       "ST": "Oregon"
     }
@@ -506,7 +506,7 @@ cfssl gencert \
   -ca=kubernetes-front-proxy-ca.pem \
   -ca-key=kubernetes-front-proxy-ca-key.pem \
   -config=kubernetes-front-proxy-ca-config.json \
-  -profile=kubernetes-front-proxy \
+  -profile=kubernetes \
   front-proxy-client-csr.json | cfssljson -bare front-proxy-client
 }
 
@@ -1111,32 +1111,32 @@ sudo mkdir -p \
 POD_CIDR=10.200.0.0/24
 
 # the first config file in the cni/net.d firectory will be used.
-cat <<EOF | sudo tee /etc/cni/net.d/11-bridge.conf
-{
-    "cniVersion": "0.4.0",
-    "name": "bridge",
-    "type": "bridge",
-    "bridge": "cnio0",
-    "isGateway": true,
-    "ipMasq": true,
-    "ipam": {
-        "type": "host-local",
-        "ranges": [
-          [{"subnet": "${POD_CIDR}"}]
-        ],
-        "routes": [{"dst": "0.0.0.0/0"}]
-    }
-}
-EOF
+# cat <<EOF | sudo tee /etc/cni/net.d/11-bridge.conf
+# {
+#     "cniVersion": "0.4.0",
+#     "name": "bridge",
+#     "type": "bridge",
+#     "bridge": "cnio0",
+#     "isGateway": true,
+#     "ipMasq": true,
+#     "ipam": {
+#         "type": "host-local",
+#         "ranges": [
+#           [{"subnet": "${POD_CIDR}"}]
+#         ],
+#         "routes": [{"dst": "0.0.0.0/0"}]
+#     }
+# }
+# EOF
 
-# Create the loopback network configuration file:
-cat <<EOF | sudo tee /etc/cni/net.d/99-loopback.conf
-{
-    "cniVersion": "0.4.0",
-    "name": "lo",
-    "type": "loopback"
-}
-EOF
+# # Create the loopback network configuration file:
+# cat <<EOF | sudo tee /etc/cni/net.d/99-loopback.conf
+# {
+#     "cniVersion": "0.4.0",
+#     "name": "lo",
+#     "type": "loopback"
+# }
+# EOF
 
 ## Configure containerd
 # Create the containerd configuration file:
