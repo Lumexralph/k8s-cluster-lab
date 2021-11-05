@@ -23,7 +23,6 @@ DEFAULT_NETWORK_PREFIX = "192.168.5."
 CONTROLLER_IP_ADDRESS_START = 10
 WORKER_IP_ADDRESS_START = 20
 LB_IP_ADDRESS_START = 30
-ADMIN_IP_ADDRESS_START = 40
 
 
 
@@ -77,32 +76,10 @@ Vagrant.configure(2) do |config|
     node.vm.network :private_network, ip: DEFAULT_NETWORK_PREFIX + "#{LB_IP_ADDRESS_START}"
 	  node.vm.network "forwarded_port", guest: 22, host: 2750, auto_correct: true
 
-    node.vm.provision "setup-hosts", :type => "shell", :path => "scripts/setup-hosts.sh" do |s|
-      s.args = ["eth1"]
-    end
+    node.vm.provision "setup-config", :type => "shell", :path => "scripts/loadbalancer.sh"
 
   end
 
-  # Provision the admin machine
-  config.vm.define "admin" do |node|
-
-    node.vm.box_check_update = false
-
-    node.vm.provider "virtualbox" do |vb|
-        vb.name = "cluster-admin-v2"
-        vb.memory = 512
-        vb.cpus = 1
-    end
-
-    node.vm.hostname = "admin"
-    node.vm.network :private_network, ip: DEFAULT_NETWORK_PREFIX + "#{ADMIN_IP_ADDRESS_START}"
-	  node.vm.network "forwarded_port", guest: 22, host: 2760, auto_correct: true
-
-    node.vm.provision "setup-hosts", :type => "shell", :path => "scripts/setup-hosts.sh" do |s|
-      s.args = ["eth1"]
-    end
-
-  end
 
   # Provision the Controller nodes
   (1..NUM_CONTROLLER_NODES).each do |i|
@@ -121,9 +98,14 @@ Vagrant.configure(2) do |config|
       node.vm.network :private_network, ip: DEFAULT_NETWORK_PREFIX + "#{CONTROLLER_IP_ADDRESS_START + i}"
       node.vm.network "forwarded_port", guest: 22, host: "#{2770 + i}", auto_correct: true
 
-      node.vm.provision "setup-hosts", :type => "shell", :path => "scripts/setup-hosts.sh" do |s|
-        s.args = ["eth1"]
-      end
+      node.vm.provision "setup-hosts", :type => "shell", :path => "scripts/setup-hosts.sh"
+
+      # node.vm.provision "allow-bridge-nf-traffic", :type => "shell", :path => "scripts/allow-bridge-nf-traffic.sh"
+
+      node.vm.provision "containerd", :type => "shell", :path => "scripts/containerd.sh"
+
+      node.vm.provision "kubeadm", :type => "shell", :path => "scripts/kubeadm.sh"
+
     end
   end
 
@@ -136,7 +118,7 @@ Vagrant.configure(2) do |config|
 
         node.vm.provider "virtualbox" do |vb|
             vb.name = "kubernetes-ha-worker-#{i}-v2"
-            vb.memory = 512
+            vb.memory = 1024
             vb.cpus = 1
         end
 
@@ -144,14 +126,15 @@ Vagrant.configure(2) do |config|
         node.vm.network :private_network, ip: DEFAULT_NETWORK_PREFIX + "#{WORKER_IP_ADDRESS_START + i}"
 		    node.vm.network "forwarded_port", guest: 22, host: "#{2780 + i}", auto_correct: true
 
-        node.vm.provision "setup-hosts", :type => "shell", :path => "scripts/setup-hosts.sh" do |s|
-          s.args = ["eth1"]
-        end
+        node.vm.provision "setup-hosts", :type => "shell", :path => "scripts/setup-hosts.sh"
 
-        node.vm.provision "allow-bridge-nf-traffic", :type => "shell", :path => "scripts/allow-bridge-nf-traffic.sh"
+        # node.vm.provision "allow-bridge-nf-traffic", :type => "shell", :path => "scripts/allow-bridge-nf-traffic.sh"
+
+        node.vm.provision "containerd", :type => "shell", :path => "scripts/containerd.sh"
+
+        node.vm.provision "kubeadm", :type => "shell", :path => "scripts/kubeadm.sh"
 
     end
   end
-
 end
 
