@@ -1,0 +1,10 @@
+---
+apiVersion: getambassador.io/v3alpha1
+kind: Module
+metadata:
+  name: emissary
+  namespace: emissary
+spec:
+  config:
+  add_linkerd_headers: true
+

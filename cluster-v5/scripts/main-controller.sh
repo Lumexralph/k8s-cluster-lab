@@ -27,8 +27,8 @@ sudo kubeadm join 192.168.5.30:6443 --apiserver-advertise-address 192.168.5.13 -
 	--control-plane --certificate-key b407386d5a33ad8ed41f7b32b78bc03f7bc2a4a2405fc05b1ce653e256268eee --v=5
 
 # Join the worker nodes to the cluster with above command
-sudo kubeadm join 192.168.5.30:6443 --token mt6bwo.izvrlfyl5cskv5rj \
-	--discovery-token-ca-cert-hash sha256:7e9e2cb2cbca85f7fad5c8313b2c42860dc0c2145584ef25367ff1d49490c854
+kubeadm join 192.168.5.30:6443 --token d5gpya.rdaogyxj7k2smj98 \
+	--discovery-token-ca-cert-hash sha256:967e5d98234f5bd8c36e7b9e92cec8c8e2190611990f74fa8db1ae671fe2ea49
 
 # Enable pod networking by installing CNI plugin (calico)
 kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml

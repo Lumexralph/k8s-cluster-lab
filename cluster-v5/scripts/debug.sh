@@ -17,3 +17,11 @@ kubectl delete -f https://docs.projectcalico.org/v3.20/manifests/calico.yaml
 
 
 kubectl delete -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+
+
+# Safely removing a Node
+kubectl drain <node-name>
+
+kubectl drain <node-name> --ignore-daemonsets --delete-local-data
+
+kubectl delete node <node-name>
