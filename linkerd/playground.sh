@@ -41,10 +41,51 @@ kubectl get -n emojivoto deploy -o yaml \
   | kubectl apply -f -
 
 
-# Check your data plane with:
+# Check your data plane with the new service injection:
 linkerd -n emojivoto check --proxy
 
 # Install some extensions to give us additional functionality
 ## To install the viz extension, run:
 # install the on-cluster metrics stack
 linkerd viz install | kubectl apply -f -
+
+linkerd viz uninstall | kubecetl delete -f -
+
+# explore the dashboard, run it as a bakgroud process
+linkerd viz dashboard &
+
+# debugging
+https://cloud.redhat.com/blog/the-hidden-dangers-of-terminating-namespaces
+
+# see reasons a namespace was not deleted
+kubectl get ns linkerd-viz -o json
+
+# force deleting a Pod stuck in Terminating state
+kubectl delete pod/web-644c88ccf7-gqv5s -n linkerd-viz --grace-period=0 --force
+
+# We deliberately skip the inbound ports 80 and 443 on the ingress. We do this for two reasons:
+
+# Linkerd’s proxy doesn’t have any information about the traffic coming into an ingress so it doesn’t add value there
+# Emissary is better positioned to manage inbound traffic if it isn’t modified by Linkerd
+
+# Adding the Emissary Ingress to the Linerd Service Mesh
+kubectl -n emissary get deploy emissary-ingress -o yaml | \
+linkerd inject \
+--skip-inbound-ports 80,443 - | \
+kubectl apply -f -
+
+# Emissary Agent
+kubectl get deploy -n emissary emissary-ingress-agent -o yaml | linkerd inject - | kubectl apply -f -
+
+# Enable AutoInjection on the Namespace you are about to deploy to:
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: default # change this to your namespace if you're not using 'default'
+  annotations:
+    linkerd.io/inject: enabled
+
+# If you already had app (qotm) deployed please restart it with
+kubectl rollout restart deploy <deployment-name> -n <namespace>
+
+kubectl rollout restart deploy web -n emojivoto

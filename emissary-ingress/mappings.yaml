@@ -1,0 +1,21 @@
+---
+apiVersion: getambassador.io/v3alpha1
+kind: Mapping
+metadata:
+  name: emoji
+spec:
+  hostname: "*"
+  prefix: /
+  service: web-svc.emojivoto
+
+---
+apiVersion: getambassador.io/v3alpha1
+kind: Mapping
+metadata:
+  name: linkerd2-qotm
+spec:
+  hostname: "*"
+  prefix: /qotm-linkerd2/
+  service: qotm-linkerd2
+
+

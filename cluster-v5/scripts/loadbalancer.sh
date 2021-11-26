@@ -40,8 +40,6 @@ backend kubernetes-controller-nodes
     option ssl-hello-chk
     balance     roundrobin
     server controller-1 192.168.5.11:6443 check fall 3 rise 2
-    server controller-2 192.168.5.12:6443 check fall 3 rise 2
-    server controller-3 192.168.5.13:6443 check fall 3 rise 2
 EOF
 
 sudo service haproxy restart
