@@ -63,14 +63,14 @@ kubectl port-forward svc/guestbook-ui 8090:80
 ##### Installation of MetalLb to create a bare metal lodbalancer for 
 ### the ambassador ingress
 # manisfest
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.10.2/manifests/namespace.yaml
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.11.0/manifests/namespace.yaml
 
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.10.2/manifests/metallb.yaml
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.11.0/manifests/metallb.yaml
 
 helm repo add metallb https://metallb.github.io/metallb
 
 # attach our configuration
-helm install metallb metallb/metallb -f metallb/values.yaml
+helm install metallb metallb/metallb -f metallb/values.yaml --namespace metallb
 
 ##### Install Edge Stack and deploy a Mapping via ArgoCD
 ## start by installing Ambassador Edge Stack into your cluster.

@@ -1,5 +1,5 @@
 # Install kubeadm, kubelet, and kubectl on the controlplane and worker nodes
-sudo apt-get update 
+sudo apt-get update &&
 sudo apt-get install -y apt-transport-https ca-certificates curl
 
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
