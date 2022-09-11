@@ -1,0 +1,125 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+
+ENV["LC_ALL"] = "en_US.UTF-8"
+
+# Define the number of controller and worker nodes
+# If this number is changed, remember to update setup-hosts.sh script with the new hosts IP details in /etc/hosts of each VM.
+NUM_CONTROLLER_NODES = 2
+NUM_WORKER_NODES = 2
+
+# bento/ubuntu-20.04
+IMAGE = "generic/ubuntu2010"
+
+# Networks
+# The Kubernetes networking model assumes a flat network in which containers and nodes can communicate with each other.
+
+# Kubernetes Subnet — 192.168.5.0/24, A subnet must be provisioned with an IP address range large enough to assign a private IP address to each node in the Kubernetes cluster.
+
+# POD_CIDR — 10.200.0.0/16 <- This is the private network the PODS will use.
+# SERVICE_CIDR — 10.32.0.0/16 <- This is the private network the services will use.
+
+DEFAULT_NETWORK_PREFIX = "192.168.5."
+CONTROLLER_IP_ADDRESS_START = 10
+WORKER_IP_ADDRESS_START = 20
+LB_IP_ADDRESS_START = 30
+
+
+
+# Machines
+
+# 1. Admin PC (admin: 192.168.5.40) / or the machine used to provision the nodes
+# This ADMIN PC (Lab machine): admin: 192.168.5.40 -> I will run all the file transfer, kubernetes admin and trouble shooting.
+# This is the PC from which most of the commands in this guide will be run when configuring SSl/TLS, configs, running kubectl and more. We’ll copy files & configs to controllers & nodes as required later.
+
+# 2. Load Balancer (lb: 192.168.5.30)
+# An external load balancer will be used to expose the Kubernetes API Servers to remote clients. Also, to make a high availability cluster.
+
+# 3. Controller Nodes (192.168.5.10):  Kubernetes control plane
+# controller-1: 192.168.5.11
+# controller-2: 192.168.5.12
+# controller-3: 192.168.5.13
+
+# 4. Worker Nodes (192.168.5.20): worker nodes where containers are ultimately run
+# worker-1: 192.168.5.21
+# worker-2: 192.168.5.22
+# worker-3: 192.168.5.23
+
+
+Vagrant.configure(2) do |config|
+  # The most common configuration options are documented and commented below.
+  # For a complete reference, please see the online documentation at
+  # https://docs.vagrantup.com.
+
+  # Every Vagrant development environment requires a box. You can search for
+  # boxes at https://vagrantcloud.com/search.
+  # config.vm.box = "base"
+  config.vm.box = IMAGE
+
+  # Disable automatic box update checking. If you disable this, then
+  # boxes will only be checked for updates when the user runs
+  # `vagrant box outdated`. This is not recommended.
+  config.vm.box_check_update = false
+
+  # Provision Load Balancer Node
+  config.vm.define "loadbalancer" do |node|
+    node.vm.box_check_update = false
+
+    node.vm.provider "libvirt" do |libvirt|
+        libvirt.default_prefix = "k8s-"
+        libvirt.memory = 1024
+        libvirt.cpus = 1
+    end
+
+    node.vm.hostname = "loadbalancer"
+    node.vm.network :private_network, ip: DEFAULT_NETWORK_PREFIX + "#{LB_IP_ADDRESS_START}"
+	  node.vm.network "forwarded_port", guest: 22, host: 2750, auto_correct: true
+    node.vm.provision "lb-config", :type => "shell", :path => "scripts/loadbalancer.sh"
+  end
+
+
+  # Provision the Controller nodes
+  (1..NUM_CONTROLLER_NODES).each do |i|
+    config.vm.define "controller-#{i}" do |node|
+
+      node.vm.box_check_update = false
+      # Name shown in the GUI
+      node.vm.provider "libvirt" do |libvirt|
+          libvirt.default_prefix = "k8s-"
+          libvirt.memory = 2048
+          libvirt.cpus = 2
+      end
+
+      node.vm.hostname = "controller-#{i}"
+      node.vm.network :private_network, ip: DEFAULT_NETWORK_PREFIX + "#{CONTROLLER_IP_ADDRESS_START + i}"
+      node.vm.network "forwarded_port", guest: 22, host: "#{2770 + i}", auto_correct: true
+      node.vm.provision "setup-hosts", :type => "shell", :path => "scripts/setup-hosts.sh"
+      node.vm.provision "containerd", :type => "shell", :path => "scripts/containerd.sh"
+      node.vm.provision "kubeadm", :type => "shell", :path => "scripts/kubeadm.sh"
+    end
+  end
+
+
+  # Provision Worker Nodes
+  (1..NUM_WORKER_NODES).each do |i|
+    config.vm.define "worker-#{i}" do |node|
+        node.vm.box_check_update = false
+
+        node.vm.provider "libvirt" do |libvirt|
+            libvirt.default_prefix = "k8s"
+            libvirt.memory = 2048
+            libvirt.cpus = 2
+        end
+
+        node.vm.hostname = "worker-#{i}"
+        node.vm.network :private_network, ip: DEFAULT_NETWORK_PREFIX + "#{WORKER_IP_ADDRESS_START + i}"
+		    node.vm.network "forwarded_port", guest: 22, host: "#{2780 + i}", auto_correct: true
+        node.vm.provision "setup-hosts", :type => "shell", :path => "scripts/setup-hosts.sh"
+        node.vm.provision "containerd", :type => "shell", :path => "scripts/containerd.sh"
+        node.vm.provision "kubeadm", :type => "shell", :path => "scripts/kubeadm.sh"
+    end
+  end
+  
+end
+
